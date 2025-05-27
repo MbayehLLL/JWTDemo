@@ -6,43 +6,55 @@
   - [Inhaltsverzeichnis](#inhaltsverzeichnis)
   - [1. Einleitung](#1-einleitung)
   - [2. Grundlagen: Authentifizierung \& Autorisierung](#2-grundlagen-authentifizierung--autorisierung)
-    - [Authentifizierung:](#authentifizierung)
-    - [Autorisierung:](#autorisierung)
+    - [Authentifizierung](#authentifizierung)
+    - [Autorisierung](#autorisierung)
+    - [Warum JWT?](#warum-jwt)
   - [3. JWT in ASP.NET Core WebAPI](#3-jwt-in-aspnet-core-webapi)
     - [Voraussetzungen:](#voraussetzungen)
     - [Implementierungsschritte:](#implementierungsschritte)
-    - [Token-Erstellung:](#token-erstellung)
   - [4. API-Gateway mit Ocelot](#4-api-gateway-mit-ocelot)
-    - [Beispielhafte `ocelot.json`-Konfiguration:](#beispielhafte-ocelotjson-konfiguration)
-    - [Integration:](#integration)
+    - [Warum ein API-Gateway?](#warum-ein-api-gateway)
+    - [Warum Ocelot?](#warum-ocelot)
+    - [Beispielhafte `ocelot.json`-Konfiguration](#beispielhafte-ocelotjson-konfiguration)
+    - [Integration in ASP.NET Core](#integration-in-aspnet-core)
+      - [Pakete installieren:](#pakete-installieren)
+      - [🔧 Middleware registrieren:](#-middleware-registrieren)
+      - [Pipeline konfigurieren:](#pipeline-konfigurieren)
+    - [Wie funktioniert die Authentifizierung im Gateway?](#wie-funktioniert-die-authentifizierung-im-gateway)
   - [5. Definierte Schnittstellen: REST vs GraphQL vs gRPC](#5-definierte-schnittstellen-rest-vs-graphql-vs-grpc)
-    - [REST:](#rest)
-    - [GraphQL:](#graphql)
-    - [gRPC:](#grpc)
-    - [Fazit:](#fazit)
-  - [6. Zusammenfassung \& Best Practices](#6-zusammenfassung--best-practices)
-    - [Vorteile von JWT + Gateway:](#vorteile-von-jwt--gateway)
-    - [Herausforderungen:](#herausforderungen)
-    - [Best Practices:](#best-practices)
-  - [7. Praktische Umsetzung (Demo)](#7-praktische-umsetzung-demo)
-    - [Inhalte der Demo:](#inhalte-der-demo)
-    - [Beispielablauf:](#beispielablauf)
-    - [Fehlerbehandlung:](#fehlerbehandlung)
+    - [REST](#rest)
+    - [GraphQL](#graphql)
+    - [gRPC](#grpc)
+    - [Wann verwendet man was?](#wann-verwendet-man-was)
+  - [6. Praktische Umsetzung (Demo)](#6-praktische-umsetzung-demo)
+  - [Inhalte der Demo](#inhalte-der-demo)
+  - [7. Zusammenfassung \& Best Practices](#7-zusammenfassung--best-practices)
+    - [Vorteile von JWT + Gateway](#vorteile-von-jwt--gateway)
+    - [Herausforderungen in der Praxis](#herausforderungen-in-der-praxis)
+    - [Best Practices für den produktiven Einsatz](#best-practices-für-den-produktiven-einsatz)
   - [8. Quellen](#8-quellen)
 
 ---
 
 ## 1. Einleitung
 
-Moderne Softwarearchitekturen nutzen Microservices, um modulare, skalierbare und wartbare Systeme zu schaffen. Doch mit der Modularität kommt auch die Herausforderung: **Wie schützen wir unsere Services sicher und zentral?**
+Microservices sind heute ein gängiger Architekturansatz, um komplexe Software modular, skalierbar und wartbar zu gestalten. Jeder Service übernimmt dabei eine klar abgegrenzte Aufgabe und kann unabhängig entwickelt und betrieben werden.
 
-In dieser Präsentation zeigen wir praxisnah:
+Mit dieser Dezentralisierung entsteht jedoch eine neue Herausforderung:  
+**Wie kann sichergestellt werden, dass nur berechtigte Benutzer auf bestimmte Services zugreifen dürfen – ohne eine zentrale Sitzung oder monolithische Benutzerverwaltung?**
 
-* Wie **JWT (JSON Web Tokens)** zur sicheren Authentifizierung und Autorisierung eingesetzt wird
-* Wie ein **API-Gateway mit Ocelot** zentral schützt
-* Wie **REST, GraphQL und gRPC** als Schnittstellen agieren können
+Die Lösung liegt in der Kombination aus:
 
-> Zielgruppe: Entwickler mit Grundkenntnissen in ASP.NET Core
+- **JWT (JSON Web Tokens):** Ein kompaktes, digitales Token, das die Identität und Rechte eines Benutzers enthält – unabhängig überprüfbar und ideal für verteilte Systeme.
+- **API-Gateway (z. B. Ocelot):** Eine zentrale Komponente, die eingehende Anfragen prüft, authentifiziert und dann gezielt an die internen Microservices weiterleitet.
+
+Diese Präsentation zeigt praxisnah:
+
+- Wie man **JWT in ASP.NET Core WebAPI** integriert
+- Wie man mit **Ocelot ein API-Gateway** aufsetzt und absichert
+- Welche Rolle **REST, GraphQL und gRPC** als Schnittstellenprotokolle spielen
+
+> Zielgruppe: Entwickler mit Grundkenntnissen in ASP.NET Core und Interesse an sicherer Microservice-Kommunikation
 
 <p align="center">
   <img src="https://learn.microsoft.com/de-de/azure/architecture/microservices/images/gateway.png" alt="Microservice Architektur" width="600"/>
@@ -56,21 +68,52 @@ _Ein typisches Architekturmodell mit API-Gateway, Auth-Service und mehreren unab
 
 ## 2. Grundlagen: Authentifizierung & Autorisierung
 
-### Authentifizierung:
+In modernen Webanwendungen – insbesondere in verteilten Systemen mit Microservices – sind **Authentifizierung** und **Autorisierung** zwei zentrale Sicherheitsmechanismen, die strikt voneinander getrennt betrachtet werden sollten.
 
-Bestätigung der Identität eines Benutzers (z. B. über Login mit Passwort).
+### Authentifizierung
 
-### Autorisierung:
+Die **Authentifizierung** überprüft, ob der Benutzer tatsächlich derjenige ist, für den er sich ausgibt.
 
-Zugriffssteuerung: Was darf ein authentifizierter Benutzer tun?
+Typische Verfahren:
+- Benutzername + Passwort
+- Zwei-Faktor-Authentifizierung (z. B. SMS-Code oder Authenticator-App)
+- OAuth-Login (z. B. via Google oder GitHub)
 
-> Beispiel: Du loggst dich ein (Authentifizierung) und darfst dann nur deine Daten sehen (Autorisierung).
+Ergebnis: Der Benutzer ist **eindeutig identifiziert** – und erhält z. B. ein Token, das seine Identität bestätigt.
 
-**Warum JWT?**
+### Autorisierung
 
-* Kompakt, JSON-basiert, einfach zu übertragen
-* Kein Session-Management nötig
-* Kann Signatur und Payload enthalten (z. B. Rollen)
+Die **Autorisierung** regelt, **welche Aktionen** ein bereits authentifizierter Benutzer **durchführen darf**.
+
+Beispiele:
+- Ein „normaler Benutzer“ darf nur seine eigenen Daten sehen.
+- Ein „Admin“ darf auch andere Benutzer verwalten oder löschen.
+
+Das System prüft dabei Berechtigungen auf Basis von:
+- **Rollen** (z. B. `User`, `Admin`)
+- **Claims** (z. B. `DarfDatenExportieren: true`)
+
+> Beispiel: Du loggst dich ein (Authentifizierung) und darfst danach nur deine eigenen Daten sehen (Autorisierung).
+
+---
+
+### Warum JWT?
+
+**JWT (JSON Web Token)** ist ein offener Standard (RFC 7519) zur sicheren Übertragung von Claims zwischen zwei Parteien – ideal für Microservices.
+
+**Vorteile:**
+
+- **Kompakt:** Kann leicht über HTTP-Header gesendet werden
+- **Signiert:** Manipulationssicher durch digitale Signatur
+- **Selbstbeschreibend:** Beinhaltet alle nötigen Informationen (z. B. User-ID, Rolle)
+- **Stateless:** Kein Session-Management nötig – der Server speichert keine Sitzungsdaten
+
+Ein JWT besteht aus drei Teilen:
+1. **Header** – Typ & Signaturalgorithmus (z. B. HMAC SHA256)
+2. **Payload** – Nutzdaten (Claims)
+3. **Signature** – Schutz gegen Manipulation
+
+> Dadurch eignet sich JWT perfekt zur Weitergabe von Benutzeridentitäten an unabhängige Microservices – ohne zentralen Zustand.
 
 <p align="center">
   <img src="https://fusionauth.io/img/shared/json-web-token.png" alt="JWT Flow" width="600"/>
@@ -84,24 +127,45 @@ _Ein typischer JWT-Flow bei Login, Token-Ausstellung und Zugriff auf geschützte
 
 ## 3. JWT in ASP.NET Core WebAPI
 
+In einer verteilten Microservice-Umgebung ist es wichtig, dass sich Benutzer zentral anmelden können und ihre Identität bei allen folgenden API-Aufrufen nachweisbar ist. Genau hier setzt JWT (JSON Web Token) an: Nach erfolgreichem Login erzeugt der Server ein Token, das alle notwendigen Informationen über den Benutzer enthält – und das vom Client bei jedem weiteren Request mitgeschickt wird.
+
+---
+
 ### Voraussetzungen:
 
-* ASP.NET Core WebAPI-Projekt
-* Datenbank (z. B. MongoDB)
-* ASP.NET Core Identity für Benutzerverwaltung
+Um JWT erfolgreich in einer ASP.NET Core WebAPI umzusetzen, benötigst du:
+
+* Ein ASP.NET Core WebAPI-Projekt
+* Eine Datenbank (z. B. MongoDB, SQL Server) zur Speicherung von Benutzerdaten
+* ASP.NET Core Identity zur Verwaltung von Benutzern, Rollen und Authentifizierung
+* Eine JWT-Konfiguration in `appsettings.json` mit Angaben wie:
+  - Schlüssel (Secret)
+  - Aussteller (Issuer)
+  - Empfänger (Audience)
+  - Gültigkeitsdauer des Tokens
+
+Diese Informationen werden beim Token-Handling verwendet, um es sicher und gültig zu halten.
+
+---
 
 ### Implementierungsschritte:
 
-1. Projekt anlegen (`dotnet new webapi`)
-2. Benutzerregistrierung & Login mit Token-Erstellung
-3. Speicherung der Benutzer in MongoDB
-4. Absicherung durch `[Authorize]`
+Die grundlegenden Schritte zur Integration von JWT sind:
+
+1. **Projekt erstellen:** z. B. mit `dotnet new webapi`
+2. **Benutzerregistrierung und Login** implementieren
+3. **JWT erstellen und an den Client zurückgeben**
+4. **Benutzer in einer Datenbank speichern** (z. B. MongoDB)
+5. **API-Endpunkte mit `[Authorize]` absichern**
+
+Dadurch kann jeder nachfolgende Request auf geschützte Daten nur dann erfolgen, wenn das mitgeschickte Token gültig ist.
+
+**Beispiel zur Absicherung eines Endpunkts:**
 
 ```csharp
 [Authorize]
 [HttpGet("/profile")]
 public IActionResult GetUserProfile() => Ok("Zugriff erlaubt");
-```
 
 ### Token-Erstellung:
 
@@ -119,12 +183,38 @@ var token = new JwtSecurityToken(
 
 ## 4. API-Gateway mit Ocelot
 
-**Warum ein API-Gateway?**
+Ein **API-Gateway** ist ein zentrales Element in einer Microservice-Architektur. Es fungiert als „Türsteher“ zwischen externen Clients (z. B. Browser oder Mobile Apps) und den internen Microservices. Statt jeden Dienst direkt anzusprechen, gehen alle Anfragen **zuerst an das Gateway** – das entscheidet, ob und wohin sie weitergeleitet werden.
 
-* Zentraler Zugriffspunkt für alle Services
-* Routing, Logging, Authentifizierung und mehr
+---
 
-### Beispielhafte `ocelot.json`-Konfiguration:
+### Warum ein API-Gateway?
+
+Ein Gateway bietet viele Vorteile:
+
+- **Zentrale Authentifizierung**: JWT-Token wird nur hier geprüft – die Microservices bleiben schlank
+- **Routing**: Leitet Anfragen je nach URL, Methode oder Header an den richtigen Dienst weiter
+- **Logging & Monitoring**: Einfachere Protokollierung und Fehlerverfolgung
+- **Sicherheit**: Blockieren unerwünschter Anfragen, Rate-Limiting oder IP-Filterung
+- **Anpassung**: Übersetzung von Pfaden, Headern oder HTTP-Methoden
+
+> In vielen Szenarien ersetzt ein API-Gateway einen klassischen Load Balancer und bietet gleichzeitig Sicherheits- und Kontrollfunktionen.
+
+---
+
+### Warum Ocelot?
+
+[Ocelot](https://ocelot.readthedocs.io/en/latest/) ist ein leichtgewichtiges Open-Source API-Gateway für das .NET-Ökosystem. Es ist einfach einzurichten, vollständig in ASP.NET Core integrierbar und speziell für Microservice-Szenarien ausgelegt.
+
+Es unterstützt u. a.:
+
+- JWT-Authentifizierung
+- Weiterleitung von Anfragen (Reverse Proxy)
+- Transformation von Headern, Pfaden und Abfragen
+- Caching, Retry-Logik und Load Balancing
+
+---
+
+### Beispielhafte `ocelot.json`-Konfiguration
 
 ```json
 {
@@ -137,14 +227,71 @@ var token = new JwtSecurityToken(
         "AllowedScopes": []
       }
     }
-  ]
+  ],
+  "GlobalConfiguration": {
+    "BaseUrl": "https://localhost:5001"
+  }
 }
 ```
 
-### Integration:
+- **UpstreamPathTemplate**: Der Pfad, der vom Client aufgerufen wird  
+- **DownstreamPathTemplate**: Der interne Pfad im Microservice  
+- **AuthenticationProviderKey**: Gibt an, dass JWT-Authentifizierung aktiviert ist
 
-* Middleware einrichten mit `AddOcelot()`
-* JWT Validierung im Gateway konfigurieren
+---
+
+### Integration in ASP.NET Core
+
+Damit Ocelot funktioniert, sind nur wenige Schritte im `Program.cs` (oder `Startup.cs`) notwendig:
+
+#### Pakete installieren:
+
+- `Ocelot`
+- `Microsoft.AspNetCore.Authentication.JwtBearer`
+
+#### 🔧 Middleware registrieren:
+
+```csharp
+builder.Services.AddAuthentication("Bearer")
+    .AddJwtBearer("Bearer", options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            // Weitere Einstellungen wie Issuer, Audience, etc.
+        };
+    });
+
+builder.Services.AddOcelot();
+```
+
+#### Pipeline konfigurieren:
+
+```csharp
+app.UseAuthentication();
+app.UseAuthorization();
+await app.UseOcelot();
+```
+
+---
+
+### Wie funktioniert die Authentifizierung im Gateway?
+
+- Das Gateway liest den JWT-Token aus dem `Authorization`-Header der Anfrage.
+- Es prüft:
+  - die Signatur,
+  - das Ablaufdatum (Gültigkeit),
+  - sowie optional Claims oder Rollen.
+- Nur bei erfolgreicher Prüfung wird die Anfrage an den Ziel-Microservice weitergeleitet.
+- Andernfalls gibt Ocelot sofort eine Fehlermeldung zurück, z. B.:
+  - `401 Unauthorized` (kein Token oder ungültig)
+  - `403 Forbidden` (Token gültig, aber unzureichende Berechtigungen)
+
+> **Vorteil:** Die Microservices selbst bleiben schlank – sie müssen keine Authentifizierung mehr implementieren. Alles läuft zentral über das Gateway.
+
 
 <p align="center">
   <img src="https://fusionauth.io/img/articles/tokens-microservices-boundaries/extraction.png" alt="Gateway-Flow" width="600"/>
@@ -158,16 +305,35 @@ _Das API-Gateway prüft den JWT-Token und leitet bei Gültigkeit die Anfragen an
 
 ## 5. Definierte Schnittstellen: REST vs GraphQL vs gRPC
 
-### REST:
+In Microservice-Architekturen müssen Services miteinander kommunizieren – oft über definierte Schnittstellen. Die Wahl der Schnittstelle beeinflusst maßgeblich die Flexibilität, Geschwindigkeit und Effizienz der Kommunikation.
 
-* Ressourcenbasiert (GET /users/1)
-* Einfach, aber oft Overfetching
+Hier vergleichen wir drei weit verbreitete Ansätze: **REST**, **GraphQL** und **gRPC**.
 
-### GraphQL:
+---
 
-* Abfrage-Sprache, Client wählt Felder
-* Vorteil: exakt das zurück, was gebraucht wird
-* Nachteile: komplexere Einrichtung
+### REST
+
+REST (Representational State Transfer) ist der Klassiker unter den Webschnittstellen. Es arbeitet über das HTTP-Protokoll und verwendet standardisierte Methoden wie `GET`, `POST`, `PUT` und `DELETE`, um auf **Ressourcen** zuzugreifen.
+
+Beispiel:  
+`GET /users/1` → Gibt den Benutzer mit der ID 1 zurück
+
+**Vorteile:**
+- Einfach zu verstehen und zu implementieren
+- Breit unterstützt in allen Sprachen und Tools
+- Ideal für öffentliche APIs
+
+**Nachteile:**
+- **Overfetching:** Es werden mehr Daten geladen, als benötigt
+- **Underfetching:** Mehrere Requests nötig, um alles zu bekommen
+
+---
+
+### GraphQL
+
+GraphQL ist eine Abfrage-Sprache von Facebook. Anders als bei REST definiert der Server keine fixen Endpunkte – stattdessen stellt der **Client gezielt die Felder zusammen**, die er benötigt.
+
+Beispiel:
 
 ```graphql
 query {
@@ -178,11 +344,23 @@ query {
 }
 ```
 
-### gRPC:
+**Vorteile:**
+- Der Client bekommt **nur die Daten**, die er wirklich braucht
+- Ideal für komplexe Datenstrukturen (z. B. verschachtelte Objekte)
+- Flexibel bei Änderungen am Frontend
 
-* Binäres Protokoll, ideal für schnelle Microservice-Kommunikation
-* Verwendet Protobuf statt JSON
-* Vorteil: Performance
+**Nachteile:**
+- Komplexere Einrichtung am Server
+- Performance-Tuning schwieriger
+- Keine native Unterstützung in Browsern
+
+---
+
+### gRPC
+
+gRPC (Google Remote Procedure Call) ist ein modernes, binäres Protokoll, das auf HTTP/2 und Protocol Buffers (Protobuf) basiert. Es ist besonders für die **interne Kommunikation zwischen Microservices** gedacht.
+
+Beispiel:
 
 ```protobuf
 service UserService {
@@ -190,13 +368,25 @@ service UserService {
 }
 ```
 
-### Fazit:
+**Vorteile:**
+- Sehr **schnell und effizient** durch binäre Übertragung
+- Unterstützt **Streaming**, bidirektionale Kommunikation
+- Typensicherheit durch `.proto`-Definitionen
 
-| Schnittstelle | Vorteil                    | Nachteil                  |
-| ------------- | -------------------------- | ------------------------- |
-| REST          | Einfach, weit verbreitet   | Over-/Underfetching       |
-| GraphQL       | Flexibel, client-gesteuert | Server-Performance        |
-| gRPC          | Schnell, typisiert         | Weniger browserfreundlich |
+**Nachteile:**
+- Nicht direkt browserfähig (kein JSON)
+- Debugging auf Netzwerkebene schwieriger
+- Höhere Einstiegshürde
+
+---
+
+### Wann verwendet man was?
+
+| Schnittstelle | Vorteile                             | Nachteile                            | Geeignet für...                              |
+|---------------|--------------------------------------|---------------------------------------|----------------------------------------------|
+| **REST**      | Einfach, weit verbreitet              | Overfetching / viele Einzelanfragen   | Öffentliche APIs, einfache CRUD-Services     |
+| **GraphQL**   | Flexibel, genau abgestimmte Abfragen | Komplexer, evtl. leistungshungrig     | Frontend-getriebene APIs, Single-Page-Apps   |
+| **gRPC**      | Schnell, ressourcenschonend          | Nicht browserfähig, höherer Aufwand   | Interne Kommunikation zwischen Services      |
 
 <p align="center">
   <img src="https://miro.medium.com/v2/resize:fit:1400/1*o4TgSCCvQgyE0OKsVSgQwg.png" alt="REST vs GraphQL vs gRPC" width="600"/>
@@ -208,50 +398,73 @@ _Die Grafik zeigt Unterschiede in Struktur, Anfrageverarbeitung und Antwortverha
 
 ---
 
-## 6. Zusammenfassung & Best Practices
-
-### Vorteile von JWT + Gateway:
-
-* Skalierbare, modulare Absicherung
-* Token überall einsetzbar (z. B. SPA, Mobile)
-* Gateway entlastet Microservices
-
-### Herausforderungen:
-
-* Token-Verwaltung (z. B. Refresh Tokens)
-* Schutz sensibler Daten im Payload
-* Zugriffskontrolle über Rollen / Claims
-
-### Best Practices:
-
-* HTTPS erzwingen
-* Token-Lebensdauer beschränken
-* \[Authorize(Roles = "Admin")] für granulare Kontrolle
-* Separate Auth-Service mit Refresh-Logik
-
----
-
-## 7. Praktische Umsetzung (Demo)
+## 6. Praktische Umsetzung (Demo)
 
 > **Demo wird von \[Majd] umgesetzt und präsentiert.**
 
-### Inhalte der Demo:
+## Inhalte der Demo
+ 
+- **Benutzerregistrierung & Login**: Erstellen eines Benutzers und Erhalt eines JSON Web Tokens (JWT).
+- **Geschützte Endpunkte**: Zugriff auf Endpunkte nur mit gültigem Token via `[Authorize]`.
+- **Swagger-Tests**: Interaktives Testen der API in der Swagger-UI.
 
-* Benutzerregistrierung & Login mit JWT
-* Token-geschützte Endpunkte mit `[Authorize]`
-* Test über Swagger / Postman
+---
 
-### Beispielablauf:
+## 7. Zusammenfassung & Best Practices
 
-1. POST `/register` → Benutzer erstellen
-2. POST `/login` → JWT erhalten
-3. GET `/profile` → Nur mit Token zugänglich
-4. Aufruf via Gateway `/api/user/profile`
+Nach der theoretischen Einführung und der praktischen Umsetzung ist es wichtig, einen Blick auf die langfristige Wartbarkeit und Sicherheit der Architektur zu werfen. Die Kombination aus **JWT-Authentifizierung** und einem **zentralen API-Gateway** ist heute Standard in modernen Microservice-Systemen – aber nur, wenn sie richtig implementiert und abgesichert wird.
 
-### Fehlerbehandlung:
+---
 
-* Ungültiger Token: 401 Unauthorized
-* Token abgelaufen: 403 Forbidden
+### Vorteile von JWT + Gateway
+
+- **Skalierbar & modular:** Jeder Microservice kann unabhängig validieren, ob ein Benutzer berechtigt ist – ohne zentrale Sessionverwaltung.
+- **Flexibel einsetzbar:** JWT funktioniert in Web-Apps (SPA), Mobile Apps, Desktop-Anwendungen oder sogar IoT-Geräten.
+- **Zentrale Kontrolle:** Das Gateway übernimmt Authentifizierung und Weiterleitung – die Microservices bleiben schlank und fokussiert.
+- **Schneller Zugriff:** Keine ständige Datenbankabfrage – alle nötigen Infos stehen direkt im Token.
+- **Stateless:** Kein Session-Handling nötig, ideal für Lastverteilung und horizontale Skalierung.
+
+---
+
+### Herausforderungen in der Praxis
+
+Auch wenn JWT viele Vorteile bringt, gibt es typische Stolperfallen:
+
+- **Token-Verwaltung:** Zugriffstoken laufen irgendwann ab – hier braucht man ein Konzept für **Refresh Tokens**.
+- **Sensibler Payload:** Daten im Token (auch wenn Base64-kodiert) sind nicht verschlüsselt. Vertrauliche Informationen (z. B. Adresse, Rollenlogik) gehören nicht hinein.
+- **Token-Diebstahl:** Wenn ein Token entwendet wird, kann es missbraucht werden – vor allem bei langer Gültigkeit.
+- **Rollenkontrolle:** Wer darf was? Diese Frage muss konsequent über Claims oder Rollen geregelt werden.
+- **Token-Invalidierung:** JWTs sind stateless – einmal ausgestellt, kann man sie nicht einfach „widerrufen“ (z. B. bei Logout), es sei denn, man speichert sie serverseitig in einer Blacklist.
+
+---
+
+### Best Practices für den produktiven Einsatz
+
+Damit JWT sicher und nachhaltig funktioniert, sollten folgende Regeln beachtet werden:
+
+- **HTTPS ist Pflicht**  
+  Token dürfen niemals unverschlüsselt übertragen werden – sonst droht Token-Sniffing im Netzwerk.
+
+- **Kurze Lebensdauer für Zugriffstoken**  
+  15–60 Minuten sind üblich. Nach Ablauf kann über einen Refresh Token ein neues angefordert werden.
+
+- **Refresh-Token-Strategie umsetzen**  
+  Zugriffstoken laufen ab, Refresh Tokens bleiben länger gültig – ermöglichen eine sichere Token-Erneuerung.
+
+- **[Authorize(Roles = "...")] gezielt einsetzen**  
+  Nicht nur prüfen, ob jemand eingeloggt ist – sondern **was** die Person tun darf.
+
+- **Claims minimal halten**  
+  Nur das Nötigste ins Token schreiben: z. B. ID, E-Mail, Rolle – keine Geschäftslogik oder große Daten.
+
+- **Separate Authentifizierungslogik (AuthService)**  
+  Authentifizierung sollte **nicht direkt in jedem Microservice** stattfinden, sondern zentral über einen speziellen Auth-Service oder über das Gateway.
+
+- **Logging & Monitoring einrichten**  
+  Sicherheitsrelevante Ereignisse wie ungültige Tokens, Loginversuche oder ungewöhnliche Token-Zugriffe sollten geloggt und analysiert werden.
+
+- **Keine Tokens in URL-Parametern**  
+  Tokens gehören in den HTTP-Header, nicht in die URL – URLs landen sonst in Logs, Browser-Verlauf etc.
 
 ---
 
